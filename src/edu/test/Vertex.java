@@ -4,10 +4,12 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class Vertex {
+	
 	private int id;
 	private String name;
 	private Set<String> parameters = new HashSet<>();
-	private int visitedAntId;
+	private int visitedAntId = -1;//表示没有蚂蚁占领
+	
 	public int getId() {
 		return id;
 	}
