@@ -3,6 +3,7 @@ package edu.test;
 public class Coefficient {
 	private double weight;
 	private double pheromone;
+	
 	public double getWeight() {
 		return weight;
 	}

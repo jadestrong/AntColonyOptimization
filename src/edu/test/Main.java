@@ -4,13 +4,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
+import java.util.Stack;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import edu.bean.Ant;
 import edu.dbImpl.VertexImpl;
@@ -19,7 +26,7 @@ import edu.util.MapUtil;
 public class Main {
 	
 	private static int maxStepNum;
-	private static int antNum;
+	private static int antNumPerGroup;
 	private static int maxIterNum;
 	static {
 		Properties props = new Properties();
@@ -30,14 +37,30 @@ public class Main {
 			e.printStackTrace();
 		}
 		maxStepNum = Integer.valueOf(props.getProperty("maxStepNum"));
-		antNum = Integer.valueOf(props.getProperty("antNum"));
+		antNumPerGroup = Integer.valueOf(props.getProperty("antNumPerGroup"));
 		maxIterNum = Integer.valueOf(props.getProperty("maxIterNum"));
 	}
 	
 	public static void main(String[] args) {
+		if (System.getProperty("java.tuil.logging.config.class") == null
+				&& System.getProperty("java.util.logging.config.file") == null) {
+//			try {
+				Logger.getLogger("edu").setLevel(Level.INFO);
+//				final int LOG_ROTATION_COUNT = 10;
+//				Handler handler = new FileHandler("%h/Main.log",0,LOG_ROTATION_COUNT);
+				Handler handler = new ConsoleHandler();
+				Logger.getLogger("edu").addHandler(handler);
+//			} catch (IOException e) {
+//				Logger.getLogger("edu").log(Level.SEVERE, "Can't create log file handler", e);
+//			}
+		}
 		//读取文件中的请求关键字和条件关键字，两个集合
-		Set<String> reqKeywords = null;
-		Set<String> conKeywords = null;
+		Set<String> reqKeywords = new HashSet<>();
+		Set<String> conKeywords = new HashSet<>();
+		reqKeywords.add("retailPrice");
+		reqKeywords.add("accId");
+		conKeywords.add("city");
+		conKeywords.add("sid");
 		//根据请求关键字集合从数据库中找出所有拥有该关键字的节点id集合
 		Map<String,Set<Integer>> reqMap = VertexImpl.getKeywordIds(reqKeywords);
 		//根据条件关键字。。。
@@ -48,8 +71,11 @@ public class Main {
 		allMap.putAll(conMap);
 		//从请求映射集合中依次取出一个节点，从Graph中得到对应的对象，存入list
 		Graph graph = new Graph(allMap);
-		
+		int allKeywordNum = allMap.size();
+		int antNum = reqMap.size() * antNumPerGroup;
+		List<Ant> result = new ArrayList<>();
 		for (int i = 0;i < maxIterNum;i++) {
+			System.out.println("第" + i + "次迭代。");
 			//从reqMap中一次取出一个id
 			List<Integer> randIds = MapUtil.getRandomId(reqMap);
 			//将randIds传入graph中，从图中取出对应的节点对象
@@ -70,46 +96,33 @@ public class Main {
 			*过的节点都并入占领那个节点的蚂蚁的对象中。若为false，则要清空其占领的元素的标志。
 			*/
 			while (!antQueue.isEmpty()) {
-				Queue<Ant> savedAnt = new LinkedList<>();
+				Stack<Ant> savedAnt = new Stack<>();
 				for (Vertex v : randVertexs) {
 					Ant ant = antQueue.poll();
 					//此处应该是从当前节点出发找寻下一节点
-//					ant.getFoundKeywords().addAll(v.getParameters());
+					ant.findPath(v, graph, savedAnt);
 				}
+				//执行完一次迭代，每个集合中都派出了一只蚂蚁进行了寻路，此时可以进行出栈操作，验证结果
+				while (!savedAnt.isEmpty()) {
+					Ant ant = savedAnt.pop();
+//					ant.setAlreadySave(false);
+					if (ant.getFoundKeywords().size() == allKeywordNum) {
+						System.out.println("我找到了" + ant.getId());
+//						System.out.println(ant);
+						result.add(ant);
+						//更新信息素
+						
+					}
+					ant.destory(null, savedAnt);
+				}
+				savedAnt = null;
 			}
 		}
+		System.out.println("找到的结果数量：" + result.size());
 	}
 	
 	
-	public void findPath(Ant ant,Vertex curVertex,Graph graph,Queue<Ant> savedAnt) {
-		//是否有选择的节点
-		if (curVertex != null) {
-			//首先获取当前蚂蚁找到关键字的数量
-			int foundKeywordNum = ant.getFoundKeywords().size();
-			if (foundKeywordNum == 0) {
-				foundKeywordNum = curVertex.getParameters().size();
-			}
-			//判断当前节点是否被占领
-			if (curVertex.getVisitedAntId() >= 0) {//未被占领
-				ant.getFoundKeywords().addAll(curVertex.getParameters());
-				ant.getVisitedVertexs().add(curVertex);
-				int nowKeywordNum = ant.getFoundKeywords().size();
-				if (nowKeywordNum > foundKeywordNum && !ant.isAlreadySave()) {
-					savedAnt.add(ant);
-				}
-				//从当前节点出发从邻接表中找出下一节点
-				Vertex selectedVertex = ant.selectNextPath(curVertex, graph);
-				findPath(ant,selectedVertex,graph,savedAnt);
-			} else {
-				
-			}
-		} else {//这里要执行销毁操作，判断该蚂蚁是否被存储了
-			if (!ant.isAlreadySave()) {
-				//如果未被存储。则要清空该蚂蚁的占领信息
-				
-			}
-		}
-	}
+	
 	
 	
 	/**
